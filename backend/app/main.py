@@ -33,7 +33,6 @@ settings = get_settings()
 cors_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://lead-79nh1a878-liqen-tech.vercel.app",
 ]
 # Add production frontend URL from environment if set
 if hasattr(settings, 'frontend_url') and settings.frontend_url:
@@ -42,6 +41,7 @@ if hasattr(settings, 'frontend_url') and settings.frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=r"https://lead-.*-liqen-tech\.vercel\.app",  # Match all Vercel preview URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
