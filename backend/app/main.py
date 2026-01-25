@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
 from app.api.routes import search, leads, inbox, dashboard, auth
 from app.jobs.scheduler import start_scheduler, shutdown_scheduler
+from app.config import get_settings
 
 
 @asynccontextmanager
@@ -28,9 +29,19 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend
+settings = get_settings()
+cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://lead-79nh1a878-liqen-tech.vercel.app",
+]
+# Add production frontend URL from environment if set
+if hasattr(settings, 'frontend_url') and settings.frontend_url:
+    cors_origins.append(settings.frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
