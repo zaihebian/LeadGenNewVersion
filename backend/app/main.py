@@ -41,7 +41,7 @@ if hasattr(settings, 'frontend_url') and settings.frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://lead-.*-liqen-tech\.vercel\.app",  # Match all Vercel preview URLs
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Match all Vercel preview URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
