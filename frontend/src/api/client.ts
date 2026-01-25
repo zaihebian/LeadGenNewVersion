@@ -1,7 +1,12 @@
 import axios from 'axios'
 
+// Use environment variable for API URL, fallback to relative path for local dev
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+console.log('API_BASE_URL:', API_BASE_URL)
+console.log('VITE_API_URL env:', import.meta.env.VITE_API_URL)
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -124,7 +129,7 @@ export const authApi = {
     api.get<GmailStatus>('/auth/gmail/status'),
 
   initiateGmailAuth: () => {
-    window.location.href = '/api/auth/gmail'
+    window.location.href = `${API_BASE_URL}/auth/gmail`
   },
 }
 
