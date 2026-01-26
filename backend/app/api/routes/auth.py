@@ -46,3 +46,15 @@ async def gmail_status():
         "authenticated": is_authenticated,
         "rate_limits": rate_stats,
     }
+
+
+@router.get("/gmail/debug")
+async def gmail_debug():
+    """Debug Gmail config."""
+    from app.config import get_settings
+    settings = get_settings()
+    return {
+        "client_id": settings.gmail_client_id or "EMPTY",
+        "has_client_id": bool(settings.gmail_client_id),
+        "redirect_uri": settings.gmail_redirect_uri,
+    }
