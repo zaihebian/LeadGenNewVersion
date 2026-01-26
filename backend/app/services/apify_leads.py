@@ -62,7 +62,11 @@ class ApifyLeadsService:
         
         async with httpx.AsyncClient(timeout=300.0) as client:
             # Start the actor run
-            run_url = f"{APIFY_API_BASE}/acts/{APIFY_ACTOR_ID}/runs"
+            # Apify API requires ~ instead of / in actor ID for URL path
+            actor_id_url = APIFY_ACTOR_ID.replace("/", "~")
+            run_url = f"{APIFY_API_BASE}/acts/{actor_id_url}/runs"
+            logger.info(f"Calling Apify API: {run_url}")
+            logger.info(f"Actor ID: {APIFY_ACTOR_ID}")
             response = await client.post(
                 run_url,
                 params={"token": self.api_token},
@@ -70,7 +74,9 @@ class ApifyLeadsService:
             )
             
             if response.status_code != 201:
-                logger.error(f"Failed to start Apify run: {response.text}")
+                logger.error(f"Failed to start Apify run. URL: {run_url}")
+                logger.error(f"Status: {response.status_code}")
+                logger.error(f"Response: {response.text}")
                 raise Exception(f"Apify API error: {response.status_code}")
             
             run_data = response.json()
