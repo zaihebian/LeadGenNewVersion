@@ -7,6 +7,7 @@ import httpx
 
 from app.config import get_settings
 from app.schemas.search import ApifyQueryParams
+from app.utils.location_mapper import normalize_locations
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,12 @@ class ApifyLeadsService:
         if query_params.contact_job_title:
             input_payload["contact_job_title"] = query_params.contact_job_title
         if query_params.contact_location:
-            input_payload["contact_location"] = query_params.contact_location
+            # Normalize locations to exact Apify allowed values (safety net in case OpenAI didn't normalize properly)
+            normalized_locations = normalize_locations(query_params.contact_location)
+            if normalized_locations:
+                input_payload["contact_location"] = normalized_locations
+            else:
+                logger.warning("All location values were invalid after normalization, skipping contact_location")
         if query_params.contact_city:
             input_payload["contact_city"] = query_params.contact_city
         if query_params.seniority_level:
