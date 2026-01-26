@@ -53,10 +53,6 @@ class ApifyLeadsService:
                 logger.warning("All location values were invalid after normalization, skipping contact_location")
         if query_params.contact_city:
             input_payload["contact_city"] = query_params.contact_city
-        if query_params.seniority_level:
-            input_payload["seniority_level"] = query_params.seniority_level
-        if query_params.functional_level:
-            input_payload["functional_level"] = query_params.functional_level
         if query_params.company_industry:
             input_payload["company_industry"] = query_params.company_industry
         if query_params.company_keywords:

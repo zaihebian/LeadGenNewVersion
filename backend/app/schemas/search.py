@@ -23,8 +23,6 @@ class ApifyQueryParams(BaseModel):
     contact_job_title: Optional[list[str]] = None
     contact_location: Optional[list[str]] = None
     contact_city: Optional[list[str]] = None
-    seniority_level: Optional[list[str]] = None
-    functional_level: Optional[list[str]] = None
     company_industry: Optional[list[str]] = None
     company_keywords: Optional[list[str]] = None
     size: Optional[list[str]] = None

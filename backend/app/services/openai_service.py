@@ -37,8 +37,6 @@ IMPORTANT: You can ONLY use these exact field names (all fields accept arrays un
 People targeting:
 - contact_job_title: Array of job titles to include (e.g., ["CTO", "Head of Marketing", "VP Engineering"])
 - contact_not_job_title: Array of job titles to exclude
-- seniority_level: Array from [Founder, Owner, C-Level, Director, VP, Head, Manager, Senior, Entry, Trainee]
-- functional_level: Array from [C-Level, Finance, Product, Engineering, Design, HR, IT, Legal, Marketing, Operations, Sales, Support]
 
 Location (Include):
 - contact_location: Array of regions/countries/states. MUST be lowercase. Map: "US"->"united states", "UK"->"united kingdom", "CA"->"california, us". Examples: ["united states"], ["united kingdom"], ["california, us"]
@@ -54,16 +52,14 @@ Email quality:
 Company targeting:
 - company_domain: Array of specific domains (e.g., ["google.com", "apple.com"])
 - size: Array from ["0-1", "2-10", "11-20", "21-50", "51-100", "101-200", "201-500", "501-1000", "1001-2000", "2001-5000", "10000+"]
-- company_industry: Array of industries to include (e.g., ["computer software", "internet", "saas", "fintech"])
+- company_industry: Array of industries. MUST use exact values: "information technology & services", "computer software", "internet", "marketing & advertising", "financial services", "saas" maps to "computer software", "fintech" maps to "financial services"
 - company_not_industry: Array of industries to exclude
 - company_keywords: Array of free-text keywords to include (e.g., ["startup", "fintech"])
 - company_not_keywords: Array of free-text keywords to exclude
-- min_revenue: String (e.g., "100K", "1M", "10B")
-- max_revenue: String (e.g., "100K", "1M", "10B")
 - funding: Array from [Seed, Angel, Series A, Series B, Series C, Series D, Series E, Series F, Venture, Debt, Convertible, PE, Other]
 
 Apify Examples:
-Example 1: {"contact_job_title": ["Head of Marketing","VP Marketing","CMO"], "functional_level": ["marketing"], "contact_location": ["united states"], "company_industry": ["computer software","internet","saas"], "email_status": ["validated"]}
+Example 1: {"contact_job_title": ["Head of Marketing","VP Marketing","CMO"], "contact_location": ["united states"], "company_industry": ["computer software","internet","information technology & services","marketing & advertising"], "email_status": ["validated"]}
 Example 2: {"contact_job_title": ["CTO","Head of Engineering"], "contact_location": ["united kingdom"], "email_status": ["validated","unknown"]}
 Example 3: {"contact_city": ["amsterdam"]} (contact_location left empty for city-only targeting)
 
@@ -89,19 +85,119 @@ Return a JSON object with only the relevant fields from the list above."""
                 temperature=0.3,
             )
             
-            result = json.loads(response.choices[0].message.content)
-            logger.info(f"Generated Apify query from keywords: {result}")
+            # Log raw OpenAI API response
+            raw_content = response.choices[0].message.content
+            logger.info(f"OpenAI API raw response: {raw_content}")
+            
+            result = json.loads(raw_content)
+            logger.info(f"OpenAI API parsed JSON: {json.dumps(result, indent=2)}")
             
             # Valid Apify field names (only these are accepted by the API)
             valid_apify_fields = {
                 "contact_job_title", "contact_not_job_title",
-                "seniority_level", "functional_level",
                 "contact_location", "contact_city",
                 "contact_not_location", "contact_not_city",
                 "email_status",
                 "company_domain", "size", "company_industry", "company_not_industry",
                 "company_keywords", "company_not_keywords",
-                "min_revenue", "max_revenue", "funding"
+                "funding"
+            }
+            
+            # Valid Apify company_industry values (exact list from API)
+            valid_industries = {
+                "information technology & services", "construction", "marketing & advertising",
+                "real estate", "health, wellness & fitness", "management consulting",
+                "computer software", "internet", "retail", "financial services",
+                "consumer services", "hospital & health care", "automotive", "restaurants",
+                "education management", "food & beverages", "design", "hospitality",
+                "accounting", "events services", "nonprofit organization management",
+                "entertainment", "electrical/electronic manufacturing", "leisure, travel & tourism",
+                "professional training & coaching", "transportation/trucking/railroad",
+                "law practice", "apparel & fashion", "architecture & planning",
+                "mechanical or industrial engineering", "insurance", "telecommunications",
+                "human resources", "staffing & recruiting", "sports", "legal services",
+                "oil & energy", "media production", "machinery", "wholesale",
+                "consumer goods", "music", "photography", "medical practice", "cosmetics",
+                "environmental services", "graphic design", "business supplies & equipment",
+                "renewables & environment", "facilities services", "publishing",
+                "food production", "arts & crafts", "building materials", "civil engineering",
+                "religious institutions", "public relations & communications", "higher education",
+                "printing", "furniture", "mining & metals", "logistics & supply chain",
+                "research", "pharmaceuticals", "individual & family services", "medical devices",
+                "civic & social organization", "e-learning", "security & investigations",
+                "chemicals", "government administration", "online media", "investment management",
+                "farming", "writing & editing", "textiles", "mental health care",
+                "primary/secondary education", "broadcast media", "biotechnology",
+                "information services", "international trade & development", "motion pictures & film",
+                "consumer electronics", "banking", "import & export", "industrial automation",
+                "recreational facilities & services", "performing arts", "utilities",
+                "sporting goods", "fine art", "airlines/aviation", "computer & network security",
+                "maritime", "luxury goods & jewelry", "veterinary", "venture capital & private equity",
+                "wine & spirits", "plastics", "aviation & aerospace", "commercial real estate",
+                "computer games", "packaging & containers", "executive office", "computer hardware",
+                "computer networking", "market research", "outsourcing/offshoring", "program development",
+                "translation & localization", "philanthropy", "public safety", "alternative medicine",
+                "museums & institutions", "warehousing", "defense & space", "newspapers",
+                "paper & forest products", "law enforcement", "investment banking", "government relations",
+                "fund-raising", "think tanks", "glass, ceramics & concrete", "capital markets",
+                "semiconductors", "animation", "political organization", "package/freight delivery",
+                "wireless", "international affairs", "public policy", "libraries",
+                "gambling & casinos", "railroad manufacture", "ranching", "military",
+                "fishery", "supermarkets", "dairy", "tobacco", "shipbuilding", "judiciary",
+                "alternative dispute resolution", "nanotechnology", "agriculture", "legislative office"
+            }
+            
+            # Industry mapping for common variations
+            industry_mapping = {
+                "saas": "computer software",
+                "software": "computer software",
+                "fintech": "financial services",
+                "financial": "financial services",
+                "tech": "information technology & services",
+                "technology": "information technology & services",
+                "it": "information technology & services",
+                "healthcare": "hospital & health care",
+                "health care": "hospital & health care",
+                "wellness": "health, wellness & fitness",
+                "fitness": "health, wellness & fitness",
+                "consulting": "management consulting",
+                "marketing": "marketing & advertising",
+                "advertising": "marketing & advertising",
+                "real estate": "real estate",
+                "construction": "construction",
+                "retail": "retail",
+                "education": "education management",
+                "hospitality": "hospitality",
+                "restaurant": "restaurants",
+                "automotive": "automotive",
+                "entertainment": "entertainment",
+                "telecom": "telecommunications",
+                "telecommunications": "telecommunications",
+                "insurance": "insurance",
+                "legal": "legal services",
+                "law": "law practice",
+                "media": "media production",
+                "publishing": "publishing",
+                "pharmaceutical": "pharmaceuticals",
+                "pharma": "pharmaceuticals",
+                "biotech": "biotechnology",
+                "biotechnology": "biotechnology",
+                "banking": "banking",
+                "investment": "investment management",
+                "venture capital": "venture capital & private equity",
+                "private equity": "venture capital & private equity",
+                "aerospace": "aviation & aerospace",
+                "aviation": "airlines/aviation",
+                "defense": "defense & space",
+                "space": "defense & space",
+                "energy": "oil & energy",
+                "oil": "oil & energy",
+                "renewable": "renewables & environment",
+                "environment": "renewables & environment",
+                "government": "government administration",
+                "nonprofit": "nonprofit organization management",
+                "non-profit": "nonprofit organization management",
+                "npo": "nonprofit organization management"
             }
             
             # Filter out any invalid fields that OpenAI might have generated
@@ -116,14 +212,58 @@ Return a JSON object with only the relevant fields from the list above."""
             if invalid_fields:
                 logger.warning(f"OpenAI generated invalid fields (removed): {invalid_fields}. Only using valid Apify fields.")
             
+            logger.info(f"After field filtering: {json.dumps(filtered_result, indent=2)}")
+            
             # Normalize contact_location values to ensure they match Apify's exact requirements
             contact_location = filtered_result.get("contact_location")
             if contact_location:
+                logger.info(f"Normalizing contact_location (before): {contact_location}")
                 contact_location = normalize_locations(contact_location)
+                logger.info(f"Normalizing contact_location (after): {contact_location}")
                 if not contact_location:
                     logger.warning("All location values were invalid, removing contact_location")
                     contact_location = None
                 filtered_result["contact_location"] = contact_location
+            
+            # Normalize company_industry values to match Apify's exact allowed values
+            company_industry = filtered_result.get("company_industry")
+            if company_industry:
+                logger.info(f"Normalizing company_industry (before): {company_industry}")
+                normalized_industries = []
+                for industry in company_industry:
+                    industry_lower = industry.lower().strip()
+                    # Check if already valid
+                    if industry in valid_industries:
+                        normalized_industries.append(industry)
+                    # Check mapping
+                    elif industry_lower in industry_mapping:
+                        mapped = industry_mapping[industry_lower]
+                        if mapped in valid_industries:
+                            normalized_industries.append(mapped)
+                    # Try case-insensitive match
+                    else:
+                        for valid_industry in valid_industries:
+                            if industry_lower == valid_industry.lower():
+                                normalized_industries.append(valid_industry)
+                                break
+                        else:
+                            logger.warning(f"Could not map industry '{industry}' to valid Apify industry")
+                
+                if normalized_industries:
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    unique_industries = []
+                    for ind in normalized_industries:
+                        if ind not in seen:
+                            seen.add(ind)
+                            unique_industries.append(ind)
+                    filtered_result["company_industry"] = unique_industries
+                    logger.info(f"Normalizing company_industry (after): {unique_industries}")
+                else:
+                    logger.warning("All industry values were invalid, removing company_industry")
+                    filtered_result.pop("company_industry", None)
+            
+            logger.info(f"Final filtered result before building ApifyQueryParams: {json.dumps(filtered_result, indent=2)}")
             
             # Build ApifyQueryParams with defaults (only fields in our schema)
             query_params = ApifyQueryParams(
@@ -131,8 +271,6 @@ Return a JSON object with only the relevant fields from the list above."""
                 contact_job_title=filtered_result.get("contact_job_title"),
                 contact_location=filtered_result.get("contact_location"),
                 contact_city=filtered_result.get("contact_city"),
-                seniority_level=filtered_result.get("seniority_level"),
-                functional_level=filtered_result.get("functional_level"),
                 company_industry=filtered_result.get("company_industry"),
                 company_keywords=filtered_result.get("company_keywords"),
                 size=filtered_result.get("size"),
