@@ -1,5 +1,6 @@
 """Apify Leads Finder integration service."""
 
+import json
 import logging
 from typing import Optional, Dict, Any, List
 
@@ -60,7 +61,7 @@ class ApifyLeadsService:
         if query_params.size:
             input_payload["size"] = query_params.size
         
-        logger.info(f"Running Apify leads search with params: {input_payload}")
+        logger.info(f"Running Apify leads search with params: {json.dumps(input_payload, indent=2)}")
         
         async with httpx.AsyncClient(timeout=300.0) as client:
             # Start the actor run

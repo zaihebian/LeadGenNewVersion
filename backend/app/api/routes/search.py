@@ -1,5 +1,6 @@
 """Search routes for initiating lead collection."""
 
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,11 +41,14 @@ async def collect_and_enrich_leads(campaign_id: int, keywords: str):
             await db.commit()
             
             # Generate Apify query from keywords using OpenAI
+            logger.info(f"[Campaign {campaign_id}] Starting OpenAI query generation for: {keywords}")
             query_params = await openai_service.generate_apify_query(keywords)
             campaign.apify_query_json = query_params.model_dump_json()
             await db.commit()
+            logger.info(f"[Campaign {campaign_id}] OpenAI query generated: {campaign.apify_query_json}")
             
             # Run Apify leads search
+            logger.info(f"[Campaign {campaign_id}] Starting Apify leads search")
             result = await apify_leads_service.run_leads_search(query_params)
             raw_leads = result.get("leads", [])
             campaign.leads_found = len(raw_leads)
@@ -190,6 +194,14 @@ async def get_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
+    # Parse apify_query_json if it exists
+    query_json = None
+    if campaign.apify_query_json:
+        try:
+            query_json = json.loads(campaign.apify_query_json)
+        except:
+            query_json = campaign.apify_query_json
+    
     return {
         "id": campaign.id,
         "keywords": campaign.keywords,
@@ -199,6 +211,7 @@ async def get_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
         "leads_enriched": campaign.leads_enriched,
         "leads_emailed": campaign.leads_emailed,
         "error_message": campaign.error_message,
+        "apify_query": query_json,
         "created_at": campaign.created_at.isoformat(),
         "updated_at": campaign.updated_at.isoformat(),
     }

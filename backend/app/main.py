@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.api.routes import search, leads, inbox, dashboard, auth
+from app.api.routes import search, leads, inbox, dashboard, auth, debug
 from app.jobs.scheduler import start_scheduler, shutdown_scheduler
 from app.config import get_settings
 
@@ -53,6 +53,7 @@ app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
 app.include_router(inbox.router, prefix="/api/inbox", tags=["inbox"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(debug.router, prefix="/api", tags=["debug"])
 
 
 @app.get("/")
