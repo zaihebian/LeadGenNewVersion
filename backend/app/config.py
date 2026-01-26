@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Reply monitoring
     no_reply_followup_days: int = 14
     
+    # Frontend URL (for OAuth redirects)
+    frontend_url: str = "http://localhost:5173"
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

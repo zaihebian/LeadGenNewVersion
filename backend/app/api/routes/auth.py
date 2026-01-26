@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
 from app.services.gmail_service import gmail_service
+from app.config import get_settings
 
 router = APIRouter()
 
@@ -28,12 +29,16 @@ async def gmail_callback(code: str = Query(...)):
     """
     result = await gmail_service.handle_oauth_callback(code)
     
+    # Get frontend URL from settings
+    settings = get_settings()
+    frontend_url = settings.frontend_url or "http://localhost:5173"
+    
     if result["success"]:
         # Redirect to frontend with success
-        return RedirectResponse(url=f"http://localhost:5173/?gmail_auth=success&email={result['email']}")
+        return RedirectResponse(url=f"{frontend_url}/?gmail_auth=success&email={result['email']}")
     else:
         # Redirect to frontend with error
-        return RedirectResponse(url=f"http://localhost:5173/?gmail_auth=error&message={result['error']}")
+        return RedirectResponse(url=f"{frontend_url}/?gmail_auth=error&message={result['error']}")
 
 
 @router.get("/gmail/status")
