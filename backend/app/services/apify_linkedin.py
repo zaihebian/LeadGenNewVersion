@@ -71,7 +71,7 @@ class ApifyLinkedInService:
         input_payload = {
             "username": username,
             "page_number": 1,
-            # Note: Actor returns up to 100 posts per page, we'll slice after
+            "totalPostsToScrape": max_posts,  # Limit total posts fetched to save costs
         }
         
         try:
@@ -155,19 +155,18 @@ class ApifyLinkedInService:
         posts = []
         
         try:
-            # Handle different response structures
+            # Apify dataset items return a list of post objects directly
             if isinstance(result_data, list) and len(result_data) > 0:
-                # Response is a list of results
-                first_result = result_data[0]
-                if isinstance(first_result, dict):
-                    raw_posts = first_result.get("data", {}).get("posts", [])
+                first = result_data[0]
+                if isinstance(first, dict) and ("text" in first or "url" in first):
+                    raw_posts = result_data
                 else:
-                    raw_posts = []
+                    raw_posts = first.get("data", {}).get("posts", []) if isinstance(first, dict) else []
             elif isinstance(result_data, dict):
                 raw_posts = result_data.get("data", {}).get("posts", [])
             else:
                 raw_posts = []
-            
+
             for post in raw_posts[:max_posts]:
                 formatted_post = {
                     "text": post.get("text", ""),

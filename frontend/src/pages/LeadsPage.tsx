@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Send, ExternalLink, User, Building2, Mail } from 'lucide-react'
+import { Loader2, Send, ExternalLink, User, Building2, Mail, Download } from 'lucide-react'
 import { leadsApi } from '../api/client'
 
 const STATES = [
@@ -37,6 +37,19 @@ export default function LeadsPage() {
     },
   })
 
+  const downloadCsvMutation = useMutation({
+    mutationFn: () =>
+      leadsApi.downloadExportCsv({ state: stateFilter || undefined }).then((r) => r.data as Blob),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'leads_enriched.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+  })
+
   const getStateBadge = (state: string) => {
     const styles: Record<string, string> = {
       COLLECTED: 'bg-gray-100 text-gray-700',
@@ -66,19 +79,34 @@ export default function LeadsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-        
-        <select
-          value={stateFilter}
-          onChange={(e) => {
-            setStateFilter(e.target.value)
-            setPage(1)
-          }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          {STATES.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => downloadCsvMutation.mutate()}
+            disabled={downloadCsvMutation.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
+          >
+            {downloadCsvMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Download
+          </button>
+          <select
+            value={stateFilter}
+            onChange={(e) => {
+              setStateFilter(e.target.value)
+              setPage(1)
+            }}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            {STATES.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">

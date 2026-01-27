@@ -100,6 +100,9 @@ export const leadsApi = {
 
   getStatesSummary: () =>
     api.get<{ states: Record<string, number> }>('/leads/states/summary'),
+
+  downloadExportCsv: (params?: { state?: string; campaign_id?: number }) =>
+    api.get('/leads/export/csv', { params, responseType: 'blob' }),
 }
 
 export const inboxApi = {

@@ -1,8 +1,11 @@
 """Lead management routes."""
 
+import csv
+import io
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime
@@ -19,6 +22,67 @@ from app.services.gmail_service import gmail_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/export/csv")
+async def export_leads_csv(
+    db: AsyncSession = Depends(get_db),
+    state: Optional[LeadState] = None,
+    campaign_id: Optional[int] = None,
+):
+    """
+    Download all leads with enriched post data as CSV.
+    Respects state and campaign_id filters when provided.
+    """
+    query = select(Lead).order_by(Lead.created_at.desc())
+    if state:
+        query = query.where(Lead.state == state)
+    if campaign_id is not None:
+        query = query.where(Lead.campaign_id == campaign_id)
+    result = await db.execute(query)
+    leads = result.scalars().all()
+
+    max_posts = 5
+    lead_headers = [
+        "id", "campaign_id", "state", "first_name", "last_name", "full_name", "email",
+        "linkedin_url", "job_title", "company_name", "industry", "created_at",
+    ]
+    post_headers = []
+    for i in range(1, max_posts + 1):
+        post_headers.extend([f"post_{i}_text", f"post_{i}_date", f"post_{i}_url"])
+    headers = lead_headers + post_headers
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(headers)
+    for lead in leads:
+        row = [
+            lead.id, lead.campaign_id, lead.state.value if lead.state else "",
+            lead.first_name or "", lead.last_name or "", lead.full_name or "",
+            lead.email or "", lead.linkedin_url or "", lead.job_title or "",
+            lead.company_name or "", lead.industry or "",
+            lead.created_at.isoformat() if lead.created_at else "",
+        ]
+        posts = []
+        if lead.linkedin_posts_json and isinstance(lead.linkedin_posts_json.get("posts"), list):
+            posts = lead.linkedin_posts_json["posts"]
+        for i in range(max_posts):
+            if i < len(posts):
+                p = posts[i]
+                text = (p.get("text") or "").replace("\n", " ").replace("\r", " ")[:5000]
+                row.append(text)
+                row.append(p.get("posted_at") or "")
+                row.append(p.get("url") or "")
+            else:
+                row.extend(["", "", ""])
+        writer.writerow(row)
+
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads_enriched.csv"},
+    )
 
 
 @router.get("", response_model=LeadListResponse)
