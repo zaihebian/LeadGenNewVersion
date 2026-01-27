@@ -140,11 +140,29 @@ class ApifyLeadsService:
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
         
         leads = []
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Convert CSV row to dict (already in correct format)
-                leads.append(dict(row))
+        # Try multiple encodings to handle various character sets
+        encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings:
+            try:
+                with open(csv_path, 'r', encoding=encoding, errors='replace') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Convert CSV row to dict (already in correct format)
+                        leads.append(dict(row))
+                logger.info(f"MOCK MODE: Retrieved {len(leads)} leads from CSV (using {encoding} encoding)")
+                break
+            except UnicodeDecodeError:
+                logger.warning(f"Failed to read CSV with {encoding} encoding, trying next...")
+                leads = []
+                continue
+            except Exception as e:
+                logger.error(f"Error reading CSV with {encoding} encoding: {e}")
+                leads = []
+                continue
+        
+        if not leads:
+            raise ValueError(f"Failed to read CSV file with any encoding. Tried: {', '.join(encodings)}")
         
         logger.info(f"MOCK MODE: Retrieved {len(leads)} leads from CSV")
         return {"leads": leads, "run_id": "mock_run_123"}
