@@ -59,17 +59,7 @@ class ApifyLinkedInService:
         Returns:
             Dict containing posts data or error
         """
-        # Check if mock mode is enabled - skip API call and return empty posts
-        if self.settings.use_mock_leads:
-            username = self.extract_linkedin_username(linkedin_url)
-            return {
-                "success": True,
-                "username": username or "unknown",
-                "posts": [],
-                "run_id": "mock_linkedin_run",
-                "mock_mode": True,
-            }
-        
+        # LinkedIn API always calls real API (for testing when USE_MOCK_LEADS=true)
         if not self.api_token:
             raise ValueError("APIFY_API_TOKEN not configured")
         

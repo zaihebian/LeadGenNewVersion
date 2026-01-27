@@ -40,24 +40,21 @@ async def collect_and_enrich_leads(campaign_id: int, keywords: str):
             campaign.status = CampaignStatus.COLLECTING
             await db.commit()
             
-            # BYPASS: Skip leads-finder actor for testing
-            # Generate Apify query from keywords using OpenAI (still needed for reference)
+            # Generate Apify query from keywords using OpenAI
             query_params = await openai_service.generate_apify_query(keywords)
             campaign.apify_query_json = query_params.model_dump_json()
             await db.commit()
             
-            # BYPASS: Skip Apify leads search - use empty leads list
-            # result = await apify_leads_service.run_leads_search(query_params)
-            # raw_leads = result.get("leads", [])
-            raw_leads = []
-            campaign.leads_found = 0
+            # Run Apify leads search (respects USE_MOCK_LEADS: false=real API, true=CSV)
+            result = await apify_leads_service.run_leads_search(query_params)
+            raw_leads = result.get("leads", [])
+            campaign.leads_found = len(raw_leads)
             
             # Filter valid leads (must have email AND LinkedIn)
-            valid_leads = []
-            campaign.leads_valid = 0
+            valid_leads = apify_leads_service.filter_valid_leads(raw_leads)
+            campaign.leads_valid = len(valid_leads)
             await db.commit()
             
-            # BYPASS: Skip creating lead records from leads-finder
             # Create lead records
             for lead_data in valid_leads:
                 transformed = apify_leads_service.transform_lead_data(lead_data, campaign_id)
