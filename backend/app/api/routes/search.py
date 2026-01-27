@@ -89,6 +89,7 @@ async def collect_and_enrich_leads(campaign_id: int, keywords: str):
             # Enrich leads with LinkedIn posts
             campaign.status = CampaignStatus.ENRICHING
             await db.commit()
+            logger.info(f"[Campaign {campaign_id}] Starting enrichment for {campaign.leads_valid} leads")
             
             leads_query = select(Lead).where(Lead.campaign_id == campaign_id)
             result = await db.execute(leads_query)
@@ -98,25 +99,38 @@ async def collect_and_enrich_leads(campaign_id: int, keywords: str):
             
             for lead in leads:
                 try:
+                    logger.info(f"[Campaign {campaign_id}] Enriching lead {lead.id}: {lead.full_name} ({lead.email})")
+                    logger.info(f"[Campaign {campaign_id}] Lead {lead.id} LinkedIn URL: {lead.linkedin_url}")
+                    
                     # Fetch LinkedIn posts
                     posts_result = await apify_linkedin_service.fetch_profile_posts(
                         lead.linkedin_url,
                         max_posts=2,
                     )
                     
+                    logger.info(f"[Campaign {campaign_id}] Lead {lead.id} enrichment result: success={posts_result.get('success')}, posts_count={len(posts_result.get('posts', []))}, mock_mode={posts_result.get('mock_mode', False)}")
+                    
                     if posts_result.get("success"):
-                        lead.linkedin_posts_json = {
+                        enrichment_data = {
                             "posts": posts_result.get("posts", []),
                             "username": posts_result.get("username"),
+                            "mock_mode": posts_result.get("mock_mode", False),
                         }
+                        lead.linkedin_posts_json = enrichment_data
+                        logger.info(f"[Campaign {campaign_id}] Lead {lead.id} enriched successfully. Posts: {len(enrichment_data['posts'])}, Username: {enrichment_data['username']}")
+                    else:
+                        error_msg = posts_result.get("error", "Unknown error")
+                        lead.linkedin_posts_json = {"posts": [], "error": error_msg}
+                        logger.warning(f"[Campaign {campaign_id}] Lead {lead.id} enrichment failed: {error_msg}")
                     
                     # Transition to ENRICHED
                     await state_machine.process_collected(lead)
                     campaign.leads_enriched += 1
                     await db.commit()
+                    logger.info(f"[Campaign {campaign_id}] Lead {lead.id} transitioned to ENRICHED state. Total enriched: {campaign.leads_enriched}")
                     
                 except Exception as e:
-                    logger.error(f"Error enriching lead {lead.id}: {e}")
+                    logger.error(f"[Campaign {campaign_id}] Error enriching lead {lead.id}: {e}", exc_info=True)
                     # Still transition to ENRICHED even without posts
                     lead.linkedin_posts_json = {"posts": [], "error": str(e)}
                     await state_machine.process_collected(lead)

@@ -146,6 +146,93 @@ async def get_raw_leads(campaign_id: int, db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/campaigns/{campaign_id}/enriched-leads")
+async def get_enriched_leads(campaign_id: int, db: AsyncSession = Depends(get_db)):
+    """Get enriched leads with LinkedIn posts data - view in browser to see enrichment results."""
+    campaign = await db.get(Campaign, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Get all leads for this campaign
+    leads_query = select(Lead).where(Lead.campaign_id == campaign_id)
+    result = await db.execute(leads_query)
+    leads = result.scalars().all()
+    
+    enriched_leads = []
+    for lead in leads:
+        enrichment_status = {
+            "has_posts": bool(lead.linkedin_posts_json and lead.linkedin_posts_json.get("posts")),
+            "posts_count": len(lead.linkedin_posts_json.get("posts", [])) if lead.linkedin_posts_json else 0,
+            "has_error": bool(lead.linkedin_posts_json and lead.linkedin_posts_json.get("error")),
+            "is_mock_mode": bool(lead.linkedin_posts_json and lead.linkedin_posts_json.get("mock_mode")),
+        }
+        
+        enriched_leads.append({
+            "id": lead.id,
+            "state": lead.state.value,
+            "full_name": lead.full_name,
+            "email": lead.email,
+            "linkedin_url": lead.linkedin_url,
+            "job_title": lead.job_title,
+            "company_name": lead.company_name,
+            "enrichment_status": enrichment_status,
+            "linkedin_posts_json": lead.linkedin_posts_json,
+            "enriched_at": lead.updated_at.isoformat() if lead.state.value == "ENRICHED" else None,
+        })
+    
+    return {
+        "campaign": {
+            "id": campaign.id,
+            "keywords": campaign.keywords,
+            "status": campaign.status.value,
+            "leads_found": campaign.leads_found,
+            "leads_valid": campaign.leads_valid,
+            "leads_enriched": campaign.leads_enriched,
+        },
+        "enrichment_summary": {
+            "total_leads": len(leads),
+            "enriched_count": sum(1 for l in leads if l.state.value == "ENRICHED"),
+            "with_posts": sum(1 for l in leads if l.linkedin_posts_json and l.linkedin_posts_json.get("posts")),
+            "with_errors": sum(1 for l in leads if l.linkedin_posts_json and l.linkedin_posts_json.get("error")),
+            "mock_mode_count": sum(1 for l in leads if l.linkedin_posts_json and l.linkedin_posts_json.get("mock_mode")),
+        },
+        "leads": enriched_leads,
+    }
+
+
+@router.get("/leads/{lead_id}/enrichment")
+async def get_lead_enrichment(lead_id: int, db: AsyncSession = Depends(get_db)):
+    """Get detailed enrichment data for a specific lead - view in browser."""
+    lead = await db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    return {
+        "lead": {
+            "id": lead.id,
+            "full_name": lead.full_name,
+            "email": lead.email,
+            "linkedin_url": lead.linkedin_url,
+            "state": lead.state.value,
+            "job_title": lead.job_title,
+            "company_name": lead.company_name,
+        },
+        "enrichment": {
+            "has_data": bool(lead.linkedin_posts_json),
+            "linkedin_posts_json": lead.linkedin_posts_json,
+            "posts_count": len(lead.linkedin_posts_json.get("posts", [])) if lead.linkedin_posts_json else 0,
+            "username": lead.linkedin_posts_json.get("username") if lead.linkedin_posts_json else None,
+            "mock_mode": lead.linkedin_posts_json.get("mock_mode", False) if lead.linkedin_posts_json else False,
+            "has_error": bool(lead.linkedin_posts_json and lead.linkedin_posts_json.get("error")),
+            "error": lead.linkedin_posts_json.get("error") if lead.linkedin_posts_json else None,
+        },
+        "timestamps": {
+            "created_at": lead.created_at.isoformat(),
+            "updated_at": lead.updated_at.isoformat(),
+        },
+    }
+
+
 @router.get("/health")
 async def health_check():
     """Simple health check endpoint with service configuration status."""

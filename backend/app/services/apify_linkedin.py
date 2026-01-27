@@ -60,6 +60,18 @@ class ApifyLinkedInService:
         Returns:
             Dict containing posts data or error
         """
+        # Check if mock mode is enabled - skip API call and return empty posts
+        if self.settings.use_mock_leads:
+            username = self.extract_linkedin_username(linkedin_url)
+            logger.info(f"MOCK MODE: Skipping LinkedIn posts API call for {username}, returning empty posts")
+            return {
+                "success": True,
+                "username": username or "unknown",
+                "posts": [],
+                "run_id": "mock_linkedin_run",
+                "mock_mode": True,
+            }
+        
         if not self.api_token:
             raise ValueError("APIFY_API_TOKEN not configured")
         
@@ -79,7 +91,11 @@ class ApifyLinkedInService:
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 # Start the actor run
-                run_url = f"{APIFY_API_BASE}/acts/{APIFY_ACTOR_ID}/runs"
+                # Apify API requires ~ instead of / in actor ID for URL path
+                actor_id_url = APIFY_ACTOR_ID.replace("/", "~")
+                run_url = f"{APIFY_API_BASE}/acts/{actor_id_url}/runs"
+                logger.info(f"Calling Apify LinkedIn API: {run_url}")
+                logger.info(f"Actor ID: {APIFY_ACTOR_ID}")
                 response = await client.post(
                     run_url,
                     params={"token": self.api_token},
