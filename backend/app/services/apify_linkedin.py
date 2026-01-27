@@ -1,7 +1,9 @@
 """Apify LinkedIn Profile Posts integration service."""
 
+import csv
 import logging
 import re
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 import httpx
@@ -44,6 +46,52 @@ class ApifyLinkedInService:
         
         return None
     
+    async def _read_posts_from_csv(self, linkedin_url: str, max_posts: int = 2) -> List[Dict[str, Any]]:
+        """
+        Read LinkedIn posts from leads_enriched.csv file (mock mode).
+        
+        Args:
+            linkedin_url: LinkedIn profile URL to match
+            max_posts: Maximum posts to return
+            
+        Returns:
+            List of formatted post objects matching the LinkedIn URL
+        """
+        csv_path = Path(__file__).parent.parent.parent / "data" / "leads_enriched.csv"
+        
+        if not csv_path.exists():
+            return []
+        
+        posts = []
+        encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings:
+            try:
+                with open(csv_path, 'r', encoding=encoding, errors='replace') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        if row.get('linkedin_url', '').strip() == linkedin_url.strip():
+                            # Extract posts from columns: post_1_text, post_1_date, post_1_url, etc.
+                            for i in range(1, 6):  # Up to 5 posts
+                                text = row.get(f'post_{i}_text', '').strip()
+                                if text:
+                                    posts.append({
+                                        "text": text,
+                                        "posted_at": row.get(f'post_{i}_date', '').strip(),
+                                        "url": row.get(f'post_{i}_url', '').strip(),
+                                        "post_type": "regular",  # Default since CSV doesn't have this
+                                        "stats": {
+                                            "reactions": 0,
+                                            "comments": 0,
+                                        },
+                                    })
+                            break
+                break
+            except Exception as e:
+                continue
+        
+        return posts[:max_posts]
+    
     async def fetch_profile_posts(
         self, 
         linkedin_url: str,
@@ -59,7 +107,18 @@ class ApifyLinkedInService:
         Returns:
             Dict containing posts data or error
         """
-        # LinkedIn API always calls real API (for testing when USE_MOCK_LEADS=true)
+        # Check if mock mode is enabled - read posts from CSV instead of API
+        if self.settings.use_mock_leads:
+            username = self.extract_linkedin_username(linkedin_url)
+            posts = await self._read_posts_from_csv(linkedin_url, max_posts)
+            return {
+                "success": True,
+                "username": username or "unknown",
+                "posts": posts,
+                "run_id": "mock_linkedin_run",
+                "mock_mode": True,
+            }
+        
         if not self.api_token:
             raise ValueError("APIFY_API_TOKEN not configured")
         
