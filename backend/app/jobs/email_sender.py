@@ -26,7 +26,7 @@ async def send_initial_emails():
     2. Generates personalized emails using OpenAI
     3. Sends emails via Gmail with rate limiting
     4. Creates email thread records
-    5. Transitions leads: ENRICHED -> EMAILED_1 -> WAITING
+    5. Transitions leads: ENRICHED -> EMAILED_1
     """
     logger.info("Starting automatic email sender job")
     
@@ -151,7 +151,6 @@ async def send_email_to_lead(db: AsyncSession, lead: Lead) -> bool:
         
         # Update lead state using state machine
         await state_machine.process_enriched(lead)
-        await state_machine.start_waiting(lead)
         
         # Update campaign metrics
         campaign = await db.get(Campaign, lead.campaign_id)

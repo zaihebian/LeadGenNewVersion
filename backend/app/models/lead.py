@@ -14,11 +14,10 @@ class LeadState(str, enum.Enum):
     """Lead state machine states."""
     COLLECTED = "COLLECTED"      # Returned by leads-finder
     ENRICHED = "ENRICHED"        # LinkedIn post data added
-    EMAILED_1 = "EMAILED_1"      # First email sent
-    WAITING = "WAITING"          # Monitoring replies
+    EMAILED_1 = "EMAILED_1"      # First email sent, waiting for reply
     INTERESTED = "INTERESTED"    # Positive reply, human takeover
     NOT_INTERESTED = "NOT_INTERESTED"  # Negative reply handled
-    EMAILED_2 = "EMAILED_2"      # Final follow-up sent
+    EMAILED_2 = "EMAILED_2"      # Final follow-up sent, waiting for reply or closing
     CLOSED = "CLOSED"            # Terminal state
 
 

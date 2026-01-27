@@ -36,8 +36,8 @@ LeadGen/
 ## Lead State Machine
 
 ```
-COLLECTED → ENRICHED → EMAILED_1 → WAITING
-                                      ↓
+COLLECTED → ENRICHED → EMAILED_1 ────┐
+                                      │
                           ┌───────────┼───────────┐
                           ↓           ↓           ↓
                     INTERESTED  NOT_INTERESTED  EMAILED_2

@@ -27,7 +27,6 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     # Leads contacted (EMAILED_1 or beyond)
     contacted_states = [
         LeadState.EMAILED_1,
-        LeadState.WAITING,
         LeadState.INTERESTED,
         LeadState.NOT_INTERESTED,
         LeadState.EMAILED_2,
@@ -63,9 +62,11 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     )
     closed_leads = closed_result.scalar() or 0
     
-    # Awaiting reply (WAITING state)
+    # Awaiting reply (EMAILED_1 or EMAILED_2 state)
     awaiting_result = await db.execute(
-        select(func.count(Lead.id)).where(Lead.state == LeadState.WAITING)
+        select(func.count(Lead.id)).where(
+            Lead.state.in_([LeadState.EMAILED_1, LeadState.EMAILED_2])
+        )
     )
     awaiting_reply = awaiting_result.scalar() or 0
     

@@ -8,7 +8,6 @@ const STATES = [
   { value: 'COLLECTED', label: 'Collected' },
   { value: 'ENRICHED', label: 'Enriched' },
   { value: 'EMAILED_1', label: 'First Email Sent' },
-  { value: 'WAITING', label: 'Waiting for Reply' },
   { value: 'INTERESTED', label: 'Interested' },
   { value: 'NOT_INTERESTED', label: 'Not Interested' },
   { value: 'EMAILED_2', label: 'Follow-up Sent' },
@@ -63,7 +62,6 @@ export default function LeadsPage() {
       COLLECTED: 'bg-gray-100 text-gray-700',
       ENRICHED: 'bg-blue-100 text-blue-700',
       EMAILED_1: 'bg-purple-100 text-purple-700',
-      WAITING: 'bg-yellow-100 text-yellow-700',
       INTERESTED: 'bg-green-100 text-green-700',
       NOT_INTERESTED: 'bg-red-100 text-red-700',
       EMAILED_2: 'bg-orange-100 text-orange-700',
@@ -78,7 +76,7 @@ export default function LeadsPage() {
 
   const canSendEmail = (lead: { state: string; emails_sent_count: number }) => {
     return (
-      (lead.state === 'ENRICHED' || lead.state === 'WAITING') &&
+      (lead.state === 'ENRICHED' || lead.state === 'EMAILED_1') &&
       lead.emails_sent_count < 2
     )
   }

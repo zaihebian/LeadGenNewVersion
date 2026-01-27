@@ -350,7 +350,7 @@ async def manual_reply_check(lead_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/reply-check-all")
 async def manual_reply_check_all(db: AsyncSession = Depends(get_db)):
     """
-    Manually trigger reply check for all leads in WAITING state.
+    Manually trigger reply check for all leads waiting for replies (EMAILED_1 or EMAILED_2).
     
     This endpoint allows you to test reply detection for all waiting leads
     without waiting for the scheduled job.
@@ -361,15 +361,17 @@ async def manual_reply_check_all(db: AsyncSession = Depends(get_db)):
             detail="Gmail not authenticated. Please authenticate first."
         )
     
-    # Get all leads in WAITING state
-    waiting_leads_query = select(Lead).where(Lead.state == LeadState.WAITING)
+    # Get all leads waiting for replies (EMAILED_1 or EMAILED_2)
+    waiting_leads_query = select(Lead).where(
+        Lead.state.in_([LeadState.EMAILED_1, LeadState.EMAILED_2])
+    )
     result = await db.execute(waiting_leads_query)
     waiting_leads = result.scalars().all()
     
     if not waiting_leads:
         return {
             "success": True,
-            "message": "No leads in WAITING state",
+            "message": "No leads waiting for replies",
             "leads_checked": 0,
             "replies_found": 0,
         }

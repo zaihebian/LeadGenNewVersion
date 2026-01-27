@@ -22,7 +22,7 @@ async def send_followups():
     Check for leads that need follow-up after 14 days of no reply.
     
     This job runs periodically and:
-    1. Finds leads in WAITING state
+    1. Finds leads in EMAILED_1 state
     2. Checks if 14 days have passed since last email
     3. Sends a follow-up email
     4. Transitions lead to EMAILED_2
@@ -41,9 +41,9 @@ async def send_followups():
             # Calculate cutoff date
             cutoff_date = datetime.utcnow() - timedelta(days=followup_days)
             
-            # Get leads in WAITING state with last email before cutoff
+            # Get leads in EMAILED_1 state with last email before cutoff
             query = select(Lead).where(
-                Lead.state == LeadState.WAITING,
+                Lead.state == LeadState.EMAILED_1,
                 Lead.last_email_at.isnot(None),
                 Lead.last_email_at < cutoff_date,
                 Lead.emails_sent_count < 2,  # Haven't sent follow-up yet

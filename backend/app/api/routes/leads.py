@@ -248,8 +248,7 @@ async def send_email_to_lead(
     # Update lead state
     if lead.state == LeadState.ENRICHED:
         await state_machine.process_enriched(lead)
-        await state_machine.start_waiting(lead)
-    elif lead.state == LeadState.WAITING:
+    elif lead.state == LeadState.EMAILED_1:
         # This is a follow-up
         await state_machine.handle_no_reply(lead)
     

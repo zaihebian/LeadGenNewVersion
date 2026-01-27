@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 VALID_TRANSITIONS: Dict[LeadState, list[LeadState]] = {
     LeadState.COLLECTED: [LeadState.ENRICHED],
     LeadState.ENRICHED: [LeadState.EMAILED_1],
-    LeadState.EMAILED_1: [LeadState.WAITING],
-    LeadState.WAITING: [LeadState.INTERESTED, LeadState.NOT_INTERESTED, LeadState.EMAILED_2],
+    LeadState.EMAILED_1: [LeadState.INTERESTED, LeadState.NOT_INTERESTED, LeadState.EMAILED_2],
     LeadState.INTERESTED: [LeadState.CLOSED],
     LeadState.NOT_INTERESTED: [LeadState.CLOSED],
     LeadState.EMAILED_2: [LeadState.CLOSED],
@@ -45,11 +44,10 @@ class LeadStateMachine:
     States:
     - COLLECTED: Lead returned by Apify leads-finder
     - ENRICHED: LinkedIn post data added
-    - EMAILED_1: First email sent
-    - WAITING: Monitoring for replies
+    - EMAILED_1: First email sent, waiting for reply
     - INTERESTED: Positive reply received, human takeover
     - NOT_INTERESTED: Negative reply handled
-    - EMAILED_2: Final follow-up sent (no reply after 14 days)
+    - EMAILED_2: Final follow-up sent, waiting for reply or closing
     - CLOSED: Terminal state
     
     Rules:
@@ -134,22 +132,13 @@ class LeadStateMachine:
         
         return await self.transition(lead, LeadState.EMAILED_1, "First email sent")
     
-    async def start_waiting(self, lead: Lead) -> Lead:
-        """
-        Move lead to WAITING state after first email.
-        """
-        if lead.state != LeadState.EMAILED_1:
-            raise StateMachineError(f"Lead must be EMAILED_1, got {lead.state.value}")
-        
-        return await self.transition(lead, LeadState.WAITING, "Monitoring for replies")
-    
     async def handle_positive_reply(self, lead: Lead) -> Lead:
         """
         Handle a positive reply - transition to INTERESTED.
         This triggers human takeover.
         """
-        if lead.state != LeadState.WAITING:
-            raise StateMachineError(f"Lead must be WAITING, got {lead.state.value}")
+        if lead.state != LeadState.EMAILED_1:
+            raise StateMachineError(f"Lead must be EMAILED_1, got {lead.state.value}")
         
         lead = await self.transition(lead, LeadState.INTERESTED, "Positive reply received")
         
@@ -170,8 +159,8 @@ class LeadStateMachine:
         Handle a negative reply - transition to NOT_INTERESTED.
         One polite follow-up will be sent.
         """
-        if lead.state != LeadState.WAITING:
-            raise StateMachineError(f"Lead must be WAITING, got {lead.state.value}")
+        if lead.state != LeadState.EMAILED_1:
+            raise StateMachineError(f"Lead must be EMAILED_1, got {lead.state.value}")
         
         return await self.transition(lead, LeadState.NOT_INTERESTED, "Negative reply received")
     
@@ -179,8 +168,8 @@ class LeadStateMachine:
         """
         Handle no reply after 14 days - send follow-up and transition to EMAILED_2.
         """
-        if lead.state != LeadState.WAITING:
-            raise StateMachineError(f"Lead must be WAITING, got {lead.state.value}")
+        if lead.state != LeadState.EMAILED_1:
+            raise StateMachineError(f"Lead must be EMAILED_1, got {lead.state.value}")
         
         if lead.emails_sent_count >= MAX_EMAILS_PER_LEAD:
             # Already at max, go straight to closed

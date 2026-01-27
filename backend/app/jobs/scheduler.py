@@ -38,10 +38,10 @@ def start_scheduler():
         replace_existing=True,
     )
     
-    # Initial email sender - every 30 minutes (sends emails to ENRICHED leads)
+    # Initial email sender - every 3 minutes (sends emails to ENRICHED leads)
     scheduler.add_job(
         send_initial_emails,
-        trigger=IntervalTrigger(minutes=30),
+        trigger=IntervalTrigger(minutes=3),
         id="email_sender",
         name="Send initial emails to enriched leads",
         replace_existing=True,

@@ -46,7 +46,7 @@ async def check_all_replies():
     Check all active email threads for new replies.
     
     This job runs every hour and:
-    1. Gets all threads for leads in WAITING state
+    1. Gets all threads for leads in EMAILED_1 or EMAILED_2 state
     2. Checks Gmail for new replies
     3. Classifies reply sentiment
     4. Updates lead state accordingly
@@ -60,16 +60,18 @@ async def check_all_replies():
     
     async with async_session_maker() as db:
         try:
-            # Get leads in WAITING state
-            waiting_leads_query = select(Lead).where(Lead.state == LeadState.WAITING)
+            # Get leads in EMAILED_1 or EMAILED_2 state (waiting for replies)
+            waiting_leads_query = select(Lead).where(
+                Lead.state.in_([LeadState.EMAILED_1, LeadState.EMAILED_2])
+            )
             result = await db.execute(waiting_leads_query)
             waiting_leads = result.scalars().all()
             
             if not waiting_leads:
-                logger.info("No leads in WAITING state - job completed")
+                logger.info("No leads waiting for replies - job completed")
                 return
             
-            logger.info(f"Found {len(waiting_leads)} leads in WAITING state to check")
+            logger.info(f"Found {len(waiting_leads)} leads waiting for replies to check")
             
             replies_found = 0
             for lead in waiting_leads:
@@ -232,31 +234,48 @@ async def check_lead_replies(db: AsyncSession, lead: Lead) -> bool:
             # Update lead state based on sentiment
             state_machine = get_state_machine(db)
             
-            if sentiment == "POSITIVE":
+            # Only process replies for EMAILED_1 leads (EMAILED_2 replies are handled by closing)
+            if lead.state == LeadState.EMAILED_1:
+                if sentiment == "POSITIVE":
+                    logger.info(
+                        f"Lead {lead.id} received POSITIVE reply - transitioning to INTERESTED"
+                    )
+                    await state_machine.handle_positive_reply(lead)
+                    thread.requires_human = True
+                    logger.info(
+                        f"✓ Lead {lead.id} marked as INTERESTED - human takeover required. "
+                        f"Thread {thread.id} requires_human=True"
+                    )
+                    
+                elif sentiment == "NEGATIVE":
+                    logger.info(
+                        f"Lead {lead.id} received NEGATIVE reply - transitioning to NOT_INTERESTED"
+                    )
+                    await state_machine.handle_negative_reply(lead)
+                    logger.info(f"✓ Lead {lead.id} marked as NOT_INTERESTED")
+                    
+                    # Send polite follow-up asking why
+                    await send_polite_followup(db, lead, thread)
+                
+                elif sentiment == "NEUTRAL":
+                    logger.info(
+                        f"Lead {lead.id} received NEUTRAL reply - keeping in {lead.state.value} state"
+                    )
+            elif lead.state == LeadState.EMAILED_2:
+                # Replies to follow-up emails - mark thread for human review and close lead
                 logger.info(
-                    f"Lead {lead.id} received POSITIVE reply - transitioning to INTERESTED"
+                    f"Lead {lead.id} in EMAILED_2 received {sentiment} reply - marking for review"
                 )
-                await state_machine.handle_positive_reply(lead)
                 thread.requires_human = True
-                logger.info(
-                    f"✓ Lead {lead.id} marked as INTERESTED - human takeover required. "
-                    f"Thread {thread.id} requires_human=True"
-                )
-                
-            elif sentiment == "NEGATIVE":
-                logger.info(
-                    f"Lead {lead.id} received NEGATIVE reply - transitioning to NOT_INTERESTED"
-                )
-                await state_machine.handle_negative_reply(lead)
-                logger.info(f"✓ Lead {lead.id} marked as NOT_INTERESTED")
-                
-                # Send polite follow-up asking why
-                await send_polite_followup(db, lead, thread)
-            
-            elif sentiment == "NEUTRAL":
-                logger.info(
-                    f"Lead {lead.id} received NEUTRAL reply - keeping in WAITING state"
-                )
+                if sentiment == "POSITIVE":
+                    thread.reply_sentiment = ReplySentiment.POSITIVE
+                    await state_machine.close_lead(lead, "Reply received after follow-up")
+                elif sentiment == "NEGATIVE":
+                    thread.reply_sentiment = ReplySentiment.NEGATIVE
+                    await state_machine.close_lead(lead, "Negative reply after follow-up")
+                else:
+                    thread.reply_sentiment = ReplySentiment.NEUTRAL
+                    await state_machine.close_lead(lead, "Neutral reply after follow-up")
             
             # Commit changes
             await db.commit()
