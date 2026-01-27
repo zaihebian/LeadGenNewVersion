@@ -71,7 +71,7 @@ class ApifyLinkedInService:
         input_payload = {
             "username": username,
             "page_number": 1,
-            "totalPostsToScrape": max_posts,  # Limit total posts fetched to save costs
+            "limit": max_posts,  # Limit total posts fetched to save costs
         }
         
         try:
