@@ -1,7 +1,9 @@
 """Apify Leads Finder integration service."""
 
+import csv
 import json
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 import httpx
@@ -33,6 +35,11 @@ class ApifyLeadsService:
         Returns:
             Dict containing run results or error
         """
+        # Check if mock mode is enabled
+        if self.settings.use_mock_leads:
+            logger.info("MOCK MODE: Reading leads from CSV file instead of Apify API")
+            return await self._read_leads_from_csv()
+        
         if not self.api_token:
             raise ValueError("APIFY_API_TOKEN not configured")
         
@@ -119,59 +126,101 @@ class ApifyLeadsService:
             
             return {"leads": leads, "run_id": run_id}
     
+    async def _read_leads_from_csv(self) -> Dict[str, Any]:
+        """
+        Read leads from CSV file (mock mode).
+        
+        Returns:
+            Dict containing leads and mock run_id
+        """
+        # Get the path to the CSV file
+        csv_path = Path(__file__).parent.parent.parent / "data" / "dataset_sample.csv"
+        
+        if not csv_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {csv_path}")
+        
+        leads = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Convert CSV row to dict (already in correct format)
+                leads.append(dict(row))
+        
+        logger.info(f"MOCK MODE: Retrieved {len(leads)} leads from CSV")
+        return {"leads": leads, "run_id": "mock_run_123"}
+    
     def filter_valid_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Filter leads to only include those with email AND LinkedIn URL.
         
         Args:
-            leads: Raw leads from Apify
+            leads: Raw leads from Apify or CSV
             
         Returns:
             Filtered list of valid leads
         """
         valid_leads = []
         for lead in leads:
-            email = lead.get("email")
-            linkedin = lead.get("linkedin")
+            email = lead.get("email", "").strip() if lead.get("email") else ""
+            linkedin = lead.get("linkedin", "").strip() if lead.get("linkedin") else ""
             
+            # CRITICAL: Check for both presence AND non-empty strings
+            # This ensures required database fields will have values
             if email and linkedin:
                 valid_leads.append(lead)
             else:
-                logger.debug(f"Skipping lead without email or LinkedIn: {lead.get('full_name')}")
+                logger.debug(f"Skipping lead without email or LinkedIn: {lead.get('full_name', 'Unknown')}")
         
         logger.info(f"Filtered to {len(valid_leads)} valid leads out of {len(leads)}")
         return valid_leads
     
     def transform_lead_data(self, apify_lead: Dict[str, Any], campaign_id: int) -> Dict[str, Any]:
         """
-        Transform Apify lead data to our schema format.
+        Transform Apify lead data or CSV lead data to our schema format.
         
         Args:
-            apify_lead: Raw lead data from Apify
+            apify_lead: Raw lead data from Apify or CSV
             campaign_id: ID of the campaign
             
         Returns:
             Transformed lead data matching LeadCreate schema
         """
+        # Helper function to convert empty strings to None for optional fields
+        def to_none_if_empty(value):
+            if value is None:
+                return None
+            stripped = str(value).strip()
+            return stripped if stripped else None
+        
+        # Required fields - must be non-empty strings
+        first_name = str(apify_lead.get("first_name", "")).strip()
+        last_name = str(apify_lead.get("last_name", "")).strip()
+        email = str(apify_lead.get("email", "")).strip()
+        linkedin_url = str(apify_lead.get("linkedin", "")).strip()
+        
+        # Ensure required fields are not empty (filter_valid_leads should have caught this, but be defensive)
+        if not first_name or not last_name or not email or not linkedin_url:
+            raise ValueError(f"Required field missing in lead data: first_name={bool(first_name)}, last_name={bool(last_name)}, email={bool(email)}, linkedin={bool(linkedin_url)}")
+        
         return {
             "campaign_id": campaign_id,
-            "first_name": apify_lead.get("first_name", ""),
-            "last_name": apify_lead.get("last_name", ""),
-            "full_name": apify_lead.get("full_name"),
-            "email": apify_lead.get("email"),
-            "linkedin_url": apify_lead.get("linkedin"),
-            "job_title": apify_lead.get("job_title"),
-            "headline": apify_lead.get("headline"),
-            "city": apify_lead.get("city"),
-            "state_region": apify_lead.get("state"),
-            "country": apify_lead.get("country"),
-            "company_name": apify_lead.get("company_name"),
-            "company_domain": apify_lead.get("company_domain"),
-            "company_website": apify_lead.get("company_website"),
-            "company_linkedin": apify_lead.get("company_linkedin"),
-            "industry": apify_lead.get("industry"),
-            "company_size": apify_lead.get("company_size"),
-            "company_description": apify_lead.get("company_description"),
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": to_none_if_empty(apify_lead.get("full_name")),
+            "email": email,
+            "linkedin_url": linkedin_url,
+            "job_title": to_none_if_empty(apify_lead.get("job_title")),
+            "headline": to_none_if_empty(apify_lead.get("headline")),
+            "city": to_none_if_empty(apify_lead.get("city")),
+            "state_region": None,  # Not in CSV
+            "country": to_none_if_empty(apify_lead.get("country")),
+            "company_name": to_none_if_empty(apify_lead.get("company_name")),
+            "company_domain": None,  # Not in CSV
+            "company_website": None,  # Not in CSV
+            "company_linkedin": None,  # Not in CSV
+            "industry": to_none_if_empty(apify_lead.get("industry")),
+            "company_size": None,  # Not in CSV
+            "company_description": to_none_if_empty(apify_lead.get("company_description")),
         }
 
 

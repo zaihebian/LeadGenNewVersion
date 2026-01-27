@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Frontend URL (for OAuth redirects)
     frontend_url: str = "http://localhost:5173"
     
+    # Mock mode - use CSV instead of Apify API
+    use_mock_leads: bool = False
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
