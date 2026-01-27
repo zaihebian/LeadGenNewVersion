@@ -18,6 +18,7 @@ const STATES = [
 export default function LeadsPage() {
   const [stateFilter, setStateFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [sendingLeadId, setSendingLeadId] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -31,9 +32,16 @@ export default function LeadsPage() {
   })
 
   const sendEmailMutation = useMutation({
-    mutationFn: (leadId: number) => leadsApi.sendEmail(leadId),
+    mutationFn: (leadId: number) => {
+      setSendingLeadId(leadId)
+      return leadsApi.sendEmail(leadId)
+    },
     onSuccess: () => {
+      setSendingLeadId(null)
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+    onError: () => {
+      setSendingLeadId(null)
     },
   })
 
@@ -178,10 +186,10 @@ export default function LeadsPage() {
                         {canSendEmail(lead) && (
                           <button
                             onClick={() => sendEmailMutation.mutate(lead.id)}
-                            disabled={sendEmailMutation.isPending}
+                            disabled={sendEmailMutation.isPending && sendingLeadId === lead.id}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                           >
-                            {sendEmailMutation.isPending ? (
+                            {sendEmailMutation.isPending && sendingLeadId === lead.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <Send className="w-4 h-4" />

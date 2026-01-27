@@ -171,7 +171,10 @@ async def send_email_to_lead(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Send an email to a lead.
+    Send an email to a lead (TEST ONLY - Manual trigger).
+    
+    NOTE: In production, emails are automatically sent by the email_sender job
+    for leads in ENRICHED state. This endpoint is for testing purposes only.
     
     This generates a personalized email and sends it via Gmail.
     """

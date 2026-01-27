@@ -6,6 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.jobs.reply_monitor import check_all_replies
 from app.jobs.followup_sender import send_followups
+from app.jobs.email_sender import send_initial_emails
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,15 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=6),
         id="followup_sender",
         name="Send follow-up emails",
+        replace_existing=True,
+    )
+    
+    # Initial email sender - every 30 minutes (sends emails to ENRICHED leads)
+    scheduler.add_job(
+        send_initial_emails,
+        trigger=IntervalTrigger(minutes=30),
+        id="email_sender",
+        name="Send initial emails to enriched leads",
         replace_existing=True,
     )
     

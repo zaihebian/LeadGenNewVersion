@@ -8,10 +8,14 @@ from sqlalchemy import select
 
 from app.api.deps import get_db
 from app.models.campaign import Campaign
-from app.models.lead import Lead
+from app.models.lead import Lead, LeadState
+from app.models.email_thread import EmailThread
 from app.services.openai_service import openai_service
 from app.services.apify_leads import apify_leads_service
 from app.services.apify_linkedin import apify_linkedin_service
+from app.jobs.reply_monitor import check_lead_replies
+from app.services.gmail_service import gmail_service
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -268,4 +272,213 @@ async def health_check():
             "openai": "configured" if openai_service.settings.openai_api_key else "missing",
             "apify": "configured" if apify_leads_service.api_token else "missing",
         }
+    }
+
+
+@router.post("/reply-check/{lead_id}")
+async def manual_reply_check(lead_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Manually trigger reply check for a specific lead.
+    
+    This endpoint allows you to test reply detection for a specific lead
+    without waiting for the scheduled job.
+    """
+    lead = await db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if not gmail_service.is_authenticated():
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not authenticated. Please authenticate first."
+        )
+    
+    # Get threads for this lead
+    threads_query = select(EmailThread).where(
+        EmailThread.lead_id == lead_id,
+        EmailThread.gmail_thread_id.isnot(None),
+    )
+    result = await db.execute(threads_query)
+    threads = result.scalars().all()
+    
+    if not threads:
+        return {
+            "success": False,
+            "message": f"Lead {lead_id} has no email threads to check",
+            "lead_id": lead_id,
+            "lead_email": lead.email,
+            "lead_state": lead.state.value,
+        }
+    
+    # Get user email
+    user_email = await gmail_service.get_authenticated_user_email()
+    
+    # Check for replies
+    reply_found = await check_lead_replies(db, lead)
+    
+    # Refresh lead to get updated state
+    await db.refresh(lead)
+    
+    # Get updated thread info
+    result = await db.execute(threads_query)
+    updated_threads = result.scalars().all()
+    
+    return {
+        "success": True,
+        "message": "Reply check completed",
+        "lead_id": lead_id,
+        "lead_email": lead.email,
+        "lead_state": lead.state.value,
+        "user_email": user_email,
+        "reply_found": reply_found,
+        "threads": [
+            {
+                "id": t.id,
+                "gmail_thread_id": t.gmail_thread_id,
+                "subject": t.subject,
+                "has_reply": t.has_reply,
+                "requires_human": t.requires_human,
+                "reply_sentiment": t.reply_sentiment.value if t.reply_sentiment else None,
+                "messages_count": len(t.messages_json) if t.messages_json else 0,
+                "last_checked_at": t.last_checked_at.isoformat() if t.last_checked_at else None,
+            }
+            for t in updated_threads
+        ],
+    }
+
+
+@router.post("/reply-check-all")
+async def manual_reply_check_all(db: AsyncSession = Depends(get_db)):
+    """
+    Manually trigger reply check for all leads in WAITING state.
+    
+    This endpoint allows you to test reply detection for all waiting leads
+    without waiting for the scheduled job.
+    """
+    if not gmail_service.is_authenticated():
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not authenticated. Please authenticate first."
+        )
+    
+    # Get all leads in WAITING state
+    waiting_leads_query = select(Lead).where(Lead.state == LeadState.WAITING)
+    result = await db.execute(waiting_leads_query)
+    waiting_leads = result.scalars().all()
+    
+    if not waiting_leads:
+        return {
+            "success": True,
+            "message": "No leads in WAITING state",
+            "leads_checked": 0,
+            "replies_found": 0,
+        }
+    
+    # Get user email
+    user_email = await gmail_service.get_authenticated_user_email()
+    
+    replies_found_count = 0
+    results = []
+    
+    for lead in waiting_leads:
+        try:
+            reply_found = await check_lead_replies(db, lead)
+            await db.refresh(lead)
+            
+            results.append({
+                "lead_id": lead.id,
+                "lead_email": lead.email,
+                "lead_state": lead.state.value,
+                "reply_found": reply_found,
+            })
+            
+            if reply_found:
+                replies_found_count += 1
+        except Exception as e:
+            logger.error(f"Error checking lead {lead.id}: {e}", exc_info=True)
+            results.append({
+                "lead_id": lead.id,
+                "lead_email": lead.email,
+                "error": str(e),
+            })
+    
+    return {
+        "success": True,
+        "message": f"Checked {len(waiting_leads)} leads",
+        "user_email": user_email,
+        "leads_checked": len(waiting_leads),
+        "replies_found": replies_found_count,
+        "results": results,
+    }
+
+
+@router.get("/reply-status/{lead_id}")
+async def get_reply_status(lead_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get detailed reply detection status for a specific lead.
+    
+    Returns information about threads, messages, and reply detection results.
+    """
+    lead = await db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if not gmail_service.is_authenticated():
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail not authenticated. Please authenticate first."
+        )
+    
+    # Get threads for this lead
+    threads_query = select(EmailThread).where(EmailThread.lead_id == lead_id)
+    result = await db.execute(threads_query)
+    threads = result.scalars().all()
+    
+    # Get user email
+    user_email = await gmail_service.get_authenticated_user_email()
+    
+    thread_details = []
+    
+    for thread in threads:
+        thread_info = {
+            "id": thread.id,
+            "gmail_thread_id": thread.gmail_thread_id,
+            "subject": thread.subject,
+            "has_reply": thread.has_reply,
+            "requires_human": thread.requires_human,
+            "reply_sentiment": thread.reply_sentiment.value if thread.reply_sentiment else None,
+            "last_checked_at": thread.last_checked_at.isoformat() if thread.last_checked_at else None,
+            "created_at": thread.created_at.isoformat(),
+            "messages": [],
+        }
+        
+        # Get Gmail messages if thread has Gmail thread ID
+        if thread.gmail_thread_id:
+            try:
+                gmail_result = await gmail_service.get_thread_messages(thread.gmail_thread_id)
+                if gmail_result.get("success"):
+                    messages = gmail_result.get("messages", [])
+                    thread_info["gmail_messages_count"] = len(messages)
+                    
+                    for msg in messages:
+                        from_header = msg.get("from", "")
+                        thread_info["messages"].append({
+                            "id": msg.get("id"),
+                            "from": from_header,
+                            "subject": msg.get("subject", ""),
+                            "date": msg.get("date", ""),
+                            "is_sent": msg.get("is_sent", False),
+                            "body_preview": msg.get("body", "")[:200] if msg.get("body") else "",
+                        })
+            except Exception as e:
+                thread_info["gmail_error"] = str(e)
+        
+        thread_details.append(thread_info)
+    
+    return {
+        "lead_id": lead_id,
+        "lead_email": lead.email,
+        "lead_state": lead.state.value,
+        "user_email": user_email,
+        "threads": thread_details,
     }

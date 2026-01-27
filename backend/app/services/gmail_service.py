@@ -84,6 +84,7 @@ class GmailService:
             min_interval_seconds=self.settings.min_email_interval_seconds,
         )
         self._credentials_store: Dict[str, Any] = {}
+        self._user_email: Optional[str] = None
     
     def get_oauth_flow(self) -> Flow:
         """Create OAuth2 flow for Gmail authorization."""
@@ -144,10 +145,14 @@ class GmailService:
             # Get user email
             service = build("gmail", "v1", credentials=self.credentials)
             profile = service.users().getProfile(userId="me").execute()
+            user_email = profile.get("emailAddress")
+            
+            # Store user email for reply detection
+            self._user_email = user_email
             
             return {
                 "success": True,
-                "email": profile.get("emailAddress"),
+                "email": user_email,
             }
             
         except Exception as e:
@@ -182,6 +187,30 @@ class GmailService:
         """Check if Gmail is authenticated."""
         creds = self._get_credentials()
         return creds is not None and creds.valid
+    
+    async def get_authenticated_user_email(self) -> Optional[str]:
+        """
+        Get the authenticated user's email address.
+        
+        Returns:
+            User email if authenticated, None otherwise
+        """
+        if self._user_email:
+            return self._user_email
+        
+        credentials = self._get_credentials()
+        if not credentials:
+            return None
+        
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+            profile = service.users().getProfile(userId="me").execute()
+            user_email = profile.get("emailAddress")
+            self._user_email = user_email
+            return user_email
+        except Exception as e:
+            logger.error(f"Failed to get user email: {e}")
+            return None
     
     async def send_email(
         self,
@@ -288,7 +317,14 @@ class GmailService:
                     "is_sent": "SENT" in msg.get("labelIds", []),
                 })
             
-            return {"success": True, "messages": messages}
+            # Include user email for reply detection
+            user_email = await self.get_authenticated_user_email()
+            
+            return {
+                "success": True,
+                "messages": messages,
+                "user_email": user_email,
+            }
             
         except Exception as e:
             logger.error(f"Failed to get thread: {e}")
