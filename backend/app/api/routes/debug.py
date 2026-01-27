@@ -11,6 +11,7 @@ from app.models.campaign import Campaign
 from app.models.lead import Lead
 from app.services.openai_service import openai_service
 from app.services.apify_leads import apify_leads_service
+from app.services.apify_linkedin import apify_linkedin_service
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,31 @@ async def get_lead_enrichment(lead_id: int, db: AsyncSession = Depends(get_db)):
             "updated_at": lead.updated_at.isoformat(),
         },
     }
+
+
+@router.get("/test-linkedin")
+async def test_linkedin(linkedin_url: str = Query(..., description="LinkedIn profile URL to test"), max_posts: int = Query(2, description="Maximum posts to fetch")):
+    """Test LinkedIn profile posts actor directly - view results in browser."""
+    try:
+        result = await apify_linkedin_service.fetch_profile_posts(linkedin_url, max_posts=max_posts)
+        return {
+            "success": result.get("success", False),
+            "linkedin_url": linkedin_url,
+            "username": result.get("username"),
+            "posts_count": len(result.get("posts", [])),
+            "posts": result.get("posts", []),
+            "run_id": result.get("run_id"),
+            "mock_mode": result.get("mock_mode", False),
+            "error": result.get("error"),
+            "full_result": result,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "linkedin_url": linkedin_url,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
 
 
 @router.get("/health")

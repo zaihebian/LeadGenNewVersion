@@ -42,7 +42,6 @@ class ApifyLinkedInService:
             if match:
                 return match.group(1)
         
-        logger.warning(f"Could not extract username from: {linkedin_url}")
         return None
     
     async def fetch_profile_posts(
@@ -63,7 +62,6 @@ class ApifyLinkedInService:
         # Check if mock mode is enabled - skip API call and return empty posts
         if self.settings.use_mock_leads:
             username = self.extract_linkedin_username(linkedin_url)
-            logger.info(f"MOCK MODE: Skipping LinkedIn posts API call for {username}, returning empty posts")
             return {
                 "success": True,
                 "username": username or "unknown",
@@ -86,16 +84,12 @@ class ApifyLinkedInService:
             # Note: Actor returns up to 100 posts per page, we'll slice after
         }
         
-        logger.info(f"Fetching LinkedIn posts for: {username}")
-        
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 # Start the actor run
                 # Apify API requires ~ instead of / in actor ID for URL path
                 actor_id_url = APIFY_ACTOR_ID.replace("/", "~")
                 run_url = f"{APIFY_API_BASE}/acts/{actor_id_url}/runs"
-                logger.info(f"Calling Apify LinkedIn API: {run_url}")
-                logger.info(f"Actor ID: {APIFY_ACTOR_ID}")
                 response = await client.post(
                     run_url,
                     params={"token": self.api_token},
@@ -103,12 +97,10 @@ class ApifyLinkedInService:
                 )
                 
                 if response.status_code != 201:
-                    logger.error(f"Failed to start Apify run: {response.text}")
                     return {"success": False, "error": f"API error: {response.status_code}", "posts": []}
                 
                 run_data = response.json()
                 run_id = run_data["data"]["id"]
-                logger.info(f"Started LinkedIn posts run: {run_id}")
                 
                 # Wait for run to complete (poll)
                 run_status_url = f"{APIFY_API_BASE}/actor-runs/{run_id}"
@@ -157,7 +149,6 @@ class ApifyLinkedInService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error fetching LinkedIn posts: {e}")
             return {"success": False, "error": str(e), "posts": []}
     
     def _extract_posts(self, result_data: Any, max_posts: int) -> List[Dict[str, Any]]:
@@ -200,10 +191,8 @@ class ApifyLinkedInService:
                 }
                 posts.append(formatted_post)
             
-            logger.info(f"Extracted {len(posts)} posts")
-            
         except Exception as e:
-            logger.error(f"Error extracting posts: {e}")
+            pass
         
         return posts
 
