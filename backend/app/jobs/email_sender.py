@@ -13,6 +13,7 @@ from app.models.campaign import Campaign
 from app.services.gmail_service import gmail_service
 from app.services.openai_service import openai_service
 from app.services.state_machine import get_state_machine
+from app.services.company_context import get_company_context
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,7 @@ async def send_email_to_lead(db: AsyncSession, lead: Lead) -> bool:
             lead_data,
             linkedin_posts,
             prompt_variant=lead.emails_sent_count,
+            company_context=get_company_context(),
         )
         
         # Send email

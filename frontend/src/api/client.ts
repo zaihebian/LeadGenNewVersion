@@ -81,11 +81,34 @@ export const searchApi = {
   startSearch: (keywords: string) =>
     api.post<{ campaign_id: number; status: string; message: string }>('/search', { keywords }),
 
+  uploadLeads: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ campaign_id: number; status: string; message: string }>(
+      '/search/upload',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+  },
+
   getCampaigns: () =>
     api.get<{ campaigns: Campaign[] }>('/search/campaigns'),
 
   getCampaign: (id: number) =>
     api.get<Campaign>(`/search/campaigns/${id}`),
+
+  uploadCompanyInfo: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ message: string; length: number }>(
+      '/search/company-info',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+  },
+
+  getCompanyInfo: () =>
+    api.get<{ has_context: boolean; text: string }>('/search/company-info'),
 }
 
 export const leadsApi = {
@@ -103,6 +126,12 @@ export const leadsApi = {
 
   downloadExportCsv: (params?: { state?: string; campaign_id?: number }) =>
     api.get('/leads/export/csv', { params, responseType: 'blob' }),
+
+  generateFirstMessage: (id: number) =>
+    api.post<{ subject: string; body: string }>(`/leads/${id}/generate-first-message`),
+
+  generateAllFirstMessages: () =>
+    api.post<{ generated: number; skipped: number; message: string }>('/leads/generate-all-first-messages'),
 }
 
 export const inboxApi = {

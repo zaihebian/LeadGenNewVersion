@@ -287,6 +287,7 @@ Return a JSON object with only the relevant fields from the list above."""
         lead_data: Dict[str, Any],
         linkedin_posts: Optional[List[Dict[str, Any]]] = None,
         prompt_variant: int = 0,
+        company_context: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Generate a personalized outreach email for a lead.
@@ -345,8 +346,16 @@ Keep it under 100 words. Be helpful, not pushy.""",
 Recent LinkedIn Activity (use for personalization):
 {chr(10).join(posts_text)}"""
         
-        system_prompt = f"""You are an expert cold email writer. {prompt_variants[prompt_variant % 3]}
+        company_block = ""
+        if company_context:
+            company_block = f"""
 
+Your Company Context (use this to tailor the value proposition and explain what you offer):
+{company_context[:2000]}
+"""
+
+        system_prompt = f"""You are an expert cold email writer. {prompt_variants[prompt_variant % 3]}
+{company_block}
 {lead_context}{post_context}
 
 Return a JSON object with 'subject' (compelling, under 50 chars) and 'body' (the email content).

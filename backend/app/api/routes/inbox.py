@@ -31,14 +31,15 @@ async def list_threads(
         requires_human: Filter threads needing human attention
         has_reply: Filter threads with/without replies
     """
-    query = select(EmailThread).join(Lead)
-    
+    # Exclude draft threads (generated but not yet sent — no gmail_thread_id)
+    query = select(EmailThread).join(Lead).where(EmailThread.gmail_thread_id.isnot(None))
+
     if requires_human is not None:
         query = query.where(EmailThread.requires_human == requires_human)
-    
+
     if has_reply is not None:
         query = query.where(EmailThread.has_reply == has_reply)
-    
+
     query = query.order_by(EmailThread.updated_at.desc())
     
     result = await db.execute(query)
@@ -208,3 +209,4 @@ async def inbox_stats(db: AsyncSession = Depends(get_db)):
         "requires_human": requires_human,
         "sentiment_breakdown": sentiment_counts,
     }
+    
